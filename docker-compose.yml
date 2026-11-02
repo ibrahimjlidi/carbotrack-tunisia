@@ -55,12 +55,30 @@ services:
       retries: 5
       start_period: 20s
 
+  fixture-loader:
+    profiles: ["tools"]
+    build:
+      context: .
+      dockerfile: packages/api/Dockerfile
+    command: ["node", "packages/api/dist/scripts/seed-fixtures.js"]
+    restart: "no"
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in the root .env file}
+      DB_NAME: ${FIXTURE_DB_NAME:-station_service_staging}
+      ALLOW_NON_STAGING_FIXTURES: ${ALLOW_NON_STAGING_FIXTURES:-}
+    depends_on:
+      db:
+        condition: service_healthy
+
   frontend:
     build:
       context: .
       dockerfile: packages/web/Dockerfile
       args:
-        VITE_API_URL: http://localhost:4000
+        VITE_API_URL: /api
     restart: unless-stopped
     ports:
       - "5173:80"
@@ -68,22 +86,38 @@ services:
       api:
         condition: service_healthy
 
-  phpmyadmin:
-    image: phpmyadmin:5.2-apache
+  nginx:
+    image: nginx:1.27-alpine
     restart: unless-stopped
-    environment:
-      PMA_HOST: db
-      PMA_PORT: 3306
-      PMA_ABSOLUTE_URI: http://localhost:8080/
-      PMA_USER: ${DB_USER:-station}
-      PMA_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in the root .env file}
-      PMA_BLOWFISH_SECRET: ${PMA_BLOWFISH_SECRET:?Set PMA_BLOWFISH_SECRET in the root .env file}
-      UPLOAD_LIMIT: 64M
     ports:
       - "127.0.0.1:8080:80"
+    volumes:
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      api:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+
+  phpmyadmin:
+    image: phpmyadmin:latest
+    restart: unless-stopped
+    environment:
+      PMA_HOSTS: db,prestashop_db
+      PMA_PORTS: 3306,3306
+    ports:
+      - "8095:80"
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      - default
+      - prestashop_net
 
 volumes:
   station_mysql_data:
+
+networks:
+  prestashop_net:
+    external: true
+    name: prestashop_prestashop_net

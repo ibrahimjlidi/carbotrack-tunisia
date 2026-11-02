@@ -14,6 +14,8 @@ Monorepo pnpm pour la gestion d'une station-service: API Express/mysql2/MySQL et
 pnpm install
 ```
 
+Avec Docker Compose, un conteneur Nginx dédié écoute sur le port HTTP 80, transmet `/api/` à l'API et les autres routes au frontend. Sur le VPS, ouvrez le site avec l'adresse IP publique ou le domaine du serveur.
+
 Creer une base MySQL et copier les fichiers d'environnement:
 
 ```bash
@@ -29,11 +31,23 @@ ls packages/api/sql/migrations
 
 Importer le contenu de chaque `migration.sql` dans phpMyAdmin. Les migrations sont des instructions MySQL natives; ne les réexécutez pas sur une base déjà migrée.
 
+Pour un environnement de staging uniquement, créez une base distincte dont le nom se termine par `_staging`, appliquez les migrations et `packages/api/sql/seed.sql`, puis importez `packages/api/sql/seed-staging.sql`. Ce seed ajoute des clients, fournisseurs, produits, achats, ventes de démonstration et un inventaire carburant; il refuse toute base dont le nom ne se termine pas par `_staging`. Il ne crée aucun compte utilisateur et ne doit jamais être importé en production.
+
+Pour générer un jeu moyen de données fictives (clients, fournisseurs, produits, achats boutique et carburant, relevés, recettes, bons de livraison/factures et inventaires carburant), utilisez le chargeur dédié après avoir préparé une base staging:
+
+```bash
+docker compose run --build --rm fixture-loader
+```
+
+Il cible `station_service_staging` par défaut, n'accepte qu'une base se terminant par `_staging`, et peut être relancé sans dupliquer les enregistrements fixtures. Il ne crée aucun utilisateur ni inventaire boutique nécessitant un compte opérateur.
+
+Pour une base de test non staging jetable uniquement, la protection peut être levée explicitement avec `ALLOW_NON_STAGING_FIXTURES=I_UNDERSTAND_THIS_INSERTS_FAKE_DATA`. Ne pas utiliser cette option sur une base opérationnelle.
+
 ## Checklist fonctionnelle
 
 ### API
 
-- Auth: `POST /auth/login`; bootstrap du premier gérant via phpMyAdmin, puis gestion des comptes avec les routes protégées `/users`.
+- Auth: `POST /auth/login`; bootstrap du premier gérant avec `docker compose exec -it api pnpm --filter @station/api create-manager`, puis gestion des comptes avec les routes protégées `/users`.
 - Carburant: `GET /cuves`, `GET /pompes`, `GET /equipes`, `GET /caisses`, `GET /vendeurs`, `GET /releves`, `POST /pompes/relever`, `PATCH /pompes/relever/:id/fermer`, `GET /cuves/stock`
 - Caisse: sessions et lignes `POST /caisse/recettes`, `POST /caisse/recettes/:id/lignes`, `POST /caisse/depenses`, `POST /caisse/depenses/:id/lignes`, `POST /caisse/credits`, `POST /caisse/credits/:id/lignes`, `POST /caisse/cloturer`, `GET /caisse/resume/:date/:equipeId/:caisseId`
 - Clients: `GET|POST /clients`, `GET|PUT /clients/:id`, `GET|POST /bons-livraison`, `POST /bons-livraison/:id/facturer`, `GET /factures`, `POST /reglements`, `GET /impayes`, `GET /produits`

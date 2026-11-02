@@ -155,6 +155,20 @@ Importez les fichiers SQL de `packages/api/sql/migrations/` dans phpMyAdmin, dan
 
 Après avoir appliqué toutes les migrations, importez `packages/api/sql/seed.sql` dans phpMyAdmin pour ajouter des données de démonstration. Le script peut être relancé sans supprimer les enregistrements opérationnels. Les noms et les prix fournis sont des exemples : remplacez-les par vos données réelles avant utilisation.
 
+For additional staging-only sample customers, suppliers, products, stock, and transactions, first create a separate staging database whose name ends in `_staging` (for example, `station_service_staging`). Apply the migrations and `seed.sql` there. The SQL demo seed at `packages/api/sql/seed-staging.sql` provides a small fixed example; for a larger fixture set, build and run the opt-in fixture loader:
+
+```bash
+docker compose run --build --rm fixture-loader
+```
+
+By default the fixture loader targets `station_service_staging`; set `FIXTURE_DB_NAME` in `.env` to select another staging database. It creates 12 clients, 8 suppliers, 20 products, 12 boutique purchases, 12 fuel deliveries, and 14 each of pump readings, cash receipts, customer delivery notes/invoices, and fuel inventory snapshots. The loader uses the MySQL root account only in this one-off container, checks that the database name ends in `_staging`, runs in a transaction, and is safe to rerun. It does not create login users or boutique inventory counts (those require an existing operator account). It is not run automatically by Docker Compose and must never be run against production.
+
+For a **disposable, non-staging test database only**, the staging-name protection can be explicitly overridden by setting `ALLOW_NON_STAGING_FIXTURES=I_UNDERSTAND_THIS_INSERTS_FAKE_DATA`. Do not use this override on a live or operational database.
+
+Create real user accounts through the authenticated user-management API instead of relying on seeded credentials.
+
+The staging seed includes example customer and supplier records, sample boutique stock and purchases, a fuel delivery, a pump reading and matching cash receipt, a customer delivery note, and a fuel stock count. These records are fictitious and should not be used for operational accounting.
+
 ### 8. Start the API server
 
 ```bash
@@ -190,20 +204,16 @@ Ouvrez ensuite [http://localhost:5173](http://localhost:5173).
 
 ### 10. Create the first user
 
-L'API n'expose pas d'inscription publique. Générez un hash bcrypt pour un mot de passe choisi dans `packages/api` :
+L'API n'expose pas d'inscription publique. Pour le premier gérant dans Docker, reconstruisez l'API puis lancez l'assistant dans un terminal interactif :
 
 ```bash
-node --input-type=module -e 'import bcrypt from "bcryptjs"; console.log(await bcrypt.hash(process.argv[1], 12))' 'CHOOSE_A_STRONG_PASSWORD'
+docker compose up -d --build api
+docker compose exec -it api pnpm --filter @station/api create-manager
 ```
 
-Insérez le compte gérant dans phpMyAdmin en remplaçant `PASTE_BCRYPT_HASH` par le résultat :
+L'assistant demande le nom d'utilisateur, le nom, le prénom et un mot de passe de 12 caractères minimum (saisi sans affichage), puis crée directement le compte dans la base configurée pour l'API. Il refuse de créer un second gérant; les autres utilisateurs se créent depuis l'application après connexion. Ne lancez pas cette commande contre une base de production sans autorisation explicite.
 
-```sql
-INSERT INTO `User` (`magasinId`, `username`, `passwordHash`, `nom`, `prenom`, `role`, `actif`, `createdAt`, `updatedAt`)
-VALUES (NULL, 'admin', 'PASTE_BCRYPT_HASH', 'Administrateur', 'Admin', 'gerant', TRUE, NOW(3), NOW(3));
-```
-
-Connectez-vous avec le mot de passe choisi. Ne stockez pas le mot de passe en clair dans la base.
+Connectez-vous avec le nom d'utilisateur et le mot de passe choisis. Le mot de passe est stocké uniquement sous forme de hash bcrypt.
 
 ## Running Both Packages
 
@@ -222,7 +232,7 @@ pnpm --filter @station/web dev
 
 ## Docker Deployment
 
-La stack Docker Compose lance MySQL 8.4, l'API Express et le frontend Nginx dans des conteneurs séparés. phpMyAdmin est également disponible pour administrer la base depuis un navigateur.
+La stack Docker Compose lance MySQL 8.4, l'API Express, le frontend et un reverse proxy Nginx dans des conteneurs séparés. Le reverse proxy écoute sur `127.0.0.1:8080`, transmet `/api/` à l'API et les autres requêtes au frontend. Sur un VPS où Nginx est déjà installé sur l'hôte, configurez le serveur virtuel existant pour transmettre le trafic du domaine à `http://127.0.0.1:8080`; conservez sa configuration TLS existante. phpMyAdmin est également disponible pour administrer la base depuis un navigateur.
 
 1. Installez Docker avec le plugin Docker Compose, puis créez le fichier de configuration local :
 
@@ -240,10 +250,13 @@ docker compose up -d --build
 
 Lors de sa première initialisation, MySQL applique automatiquement les migrations dans l'ordre puis charge `packages/api/sql/seed.sql`. Les données sont conservées dans le volume `station_mysql_data`.
 
+- Application derrière le Nginx de l'hôte : utilisez le nom de domaine du VPS. En accès local direct au conteneur uniquement : `http://127.0.0.1:8080/`.
 - Frontend : [http://localhost:5173](http://localhost:5173)
 - API : [http://localhost:4000/health](http://localhost:4000/health)
-- phpMyAdmin : [http://localhost:8080](http://localhost:8080) — connectez-vous avec `DB_USER` et `DB_PASSWORD` du fichier `.env`.
+- phpMyAdmin : [http://localhost:8095](http://localhost:8095) — connectez-vous avec `DB_USER` et `DB_PASSWORD` du fichier `.env`.
 - MySQL depuis l'hôte : `127.0.0.1:3307`
+
+Le frontend Docker utilise `/api` sur la même adresse que le site; le reverse proxy transmet ces requêtes au service API `api:4000` sur le réseau Docker. Ne configurez pas l'URL de l'API du navigateur sur `http://localhost:4000`, car `localhost` désigne l'ordinateur du navigateur.
 
 Pour suivre le démarrage :
 
