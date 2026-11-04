@@ -1,4 +1,4 @@
--- Demo reference data for a fresh Station database.
+ -- Demo reference data for a fresh Station database.
 -- Reruns only update these DEMO-coded rows; no users or transactions are created.
 
 INSERT INTO `Station` (`code`, `nom`, `active`, `createdAt`, `updatedAt`)
