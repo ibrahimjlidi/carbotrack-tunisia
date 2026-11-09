@@ -9,7 +9,8 @@ services:
       MYSQL_USER: ${DB_USER:-station}
       MYSQL_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in the root .env file}
     ports:
-      - "3307:3306"
+      # Keep host access local for development; services use the internal db hostname.
+      - "127.0.0.1:3307:3306"
     volumes:
       - station_mysql_data:/var/lib/mysql
       - ./packages/api/sql/migrations:/station-migrations:ro
@@ -100,7 +101,8 @@ services:
         condition: service_started
 
   phpmyadmin:
-    image: phpmyadmin:latest
+    image: phpmyadmin:5.2.2
+    profiles: ["dev"]
     restart: unless-stopped
     environment:
       PMA_HOSTS: db,prestashop_db
