@@ -2,13 +2,13 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import type { RowDataPacket } from 'mysql2/promise';
+import { config } from '../../lib/config.js';
 import { insertRecord, query, queryOne, updateRecord } from '../../lib/db.js';
 import { authMiddleware, requireRole, type AuthRequest } from '../../middleware/auth.js';
 import { changePasswordSchema, loginSchema, resetPasswordSchema, userCreateSchema, userUpdateSchema } from './schemas.js';
 
 const router = Router();
 export const usersRouter = Router();
-const getSecret = () => process.env.JWT_SECRET ?? 'development-secret';
 const publicUserFields = 'id, username, nom, prenom, telephone, role, actif, lastLoginAt, magasinId';
 type UserRow = RowDataPacket & {
   id: number;
@@ -24,7 +24,10 @@ type UserRow = RowDataPacket & {
 };
 
 function createToken(user: { id: number; username: string; role: 'gerant' | 'caissier' | 'vendeur'; magasinId: number | null }) {
-  return jwt.sign({ id: user.id, username: user.username, role: user.role, magasinId: user.magasinId }, getSecret(), { expiresIn: '8h' });
+  return jwt.sign({ id: user.id, username: user.username, role: user.role, magasinId: user.magasinId }, config.JWT_SECRET, {
+    algorithm: 'HS256',
+    expiresIn: '8h',
+  });
 }
 
 router.post('/login', async (request, response, next) => {

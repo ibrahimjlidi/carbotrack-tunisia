@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
+import { config } from '../lib/config.js';
 
 export type Role = 'gerant' | 'caissier' | 'vendeur';
 
@@ -14,8 +15,6 @@ export interface AuthRequest extends Request {
   user?: AuthUser;
 }
 
-const getSecret = () => process.env.JWT_SECRET ?? 'development-secret';
-
 export function authMiddleware(request: AuthRequest, response: Response, next: NextFunction) {
   const header = request.headers.authorization;
   const token = header?.startsWith('Bearer ') ? header.slice(7) : undefined;
@@ -26,7 +25,7 @@ export function authMiddleware(request: AuthRequest, response: Response, next: N
   }
 
   try {
-    request.user = jwt.verify(token, getSecret()) as AuthUser;
+    request.user = jwt.verify(token, config.JWT_SECRET, { algorithms: ['HS256'] }) as AuthUser;
     next();
   } catch {
     response.status(401).json({ message: 'Jeton invalide ou expire.' });

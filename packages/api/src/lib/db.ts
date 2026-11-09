@@ -1,25 +1,13 @@
 import 'dotenv/config';
 import mysql, { type PoolConnection, type ResultSetHeader } from 'mysql2/promise';
-
-function requiredEnv(name: 'DB_HOST' | 'DB_USER' | 'DB_NAME'): string {
-  const value = process.env[name]?.trim();
-  if (!value) {
-    throw new Error(`Missing required database environment variable: ${name}`);
-  }
-  return value;
-}
-
-const port = Number(process.env.DB_PORT ?? '3306');
-if (!Number.isInteger(port) || port < 1 || port > 65535) {
-  throw new Error('DB_PORT must be an integer between 1 and 65535.');
-}
+import { config } from './config.js';
 
 export const pool = mysql.createPool({
-  host: requiredEnv('DB_HOST'),
-  user: requiredEnv('DB_USER'),
-  password: process.env.DB_PASSWORD ?? '',
-  database: requiredEnv('DB_NAME'),
-  port,
+  host: config.DB_HOST,
+  user: config.DB_USER,
+  password: config.DB_PASSWORD,
+  database: config.DB_NAME,
+  port: config.DB_PORT,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
