@@ -13,12 +13,19 @@ import entretienRouter from './modules/entretien/router.js';
 import parametresRouter from './modules/parametres/router.js';
 import rapportsRouter from './modules/rapports/router.js';
 import referentielsRouter from './modules/referentiels/router.js';
+import { config, isCorsOriginAllowed } from './lib/config.js';
 import { errorHandler } from './middleware/error.js';
 
 const app = express();
-const port = Number(process.env.PORT ?? 4000);
+const port = config.PORT;
 
-app.use(cors({ origin: process.env.CORS_ORIGIN?.split(',').map((origin) => origin.trim()) ?? true }));
+if (config.NODE_ENV === 'development' && config.CORS_ORIGIN.length === 0) {
+  console.warn('CORS_ORIGIN is unset; allowing cross-origin requests in development.');
+}
+
+app.use(cors({
+  origin: (origin, callback) => callback(null, isCorsOriginAllowed(origin)),
+}));
 app.use(express.json());
 app.get('/health', (_request, response) => response.json({ status: 'ok' }));
 app.use('/auth', authRouter);
